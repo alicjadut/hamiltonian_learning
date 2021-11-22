@@ -27,8 +27,7 @@ def find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun):
 
 def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_init, weights, sigmas):
     
-    sim_fun = lambda theta: np.array([simulate(theta, hamiltonian_operators, s['state'], s['time'], s['observable'])
-                                      for s in exp_settings])
+    sim_fun = lambda theta: simulate_all(theta, hamiltonian_operators, exp_settings)
     grad_fun = lambda theta: error_gradient(theta,
                                             theta_init,
                                             hamiltonian_operators,
@@ -64,12 +63,16 @@ def expected_value(observable, state):
 
 
 
-def simulate(theta, operators, state, time, observable):
+def simulate_one(theta, operators, state, time, observable):
     #TO DO: add noise at the end
     hamiltonian = hamiltonian_model(theta, operators)
     evolved_state = evolve(state, hamiltonian, time)
     return expected_value(observable, evolved_state).real
 
+def simulate_all(theta, hamiltonian_operators, exp_settings):
+    data = np.array([simulate_one(theta, hamiltonian_operators, s['state'], s['time'], s['observable'])
+                                      for s in exp_settings])
+    return data
 
 
 ### GRADIENT CALCULATION
@@ -115,6 +118,3 @@ def error_gradient(theta, theta0, hamiltonian_operators, data_exp, data_sim, exp
     term2 = -np.sum(data_diff*J_array, axis = 1).imag
     
     return term1+term2
-
-
-
