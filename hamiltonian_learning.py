@@ -2,6 +2,28 @@ import numpy as np
 from scipy.optimize import fmin_cg
 from scipy.linalg import expm
 from scipy import integrate
+from functools import lru_cache, wraps
+
+def _totuple(a):
+    try:
+        return tuple(_totuple(i) for i in a)
+    except TypeError:
+        return a.item()
+
+def np_cache(function):
+    @lru_cache()
+    def cached_wrapper(*hashable_args):
+        args = (np.array(arg) for arg in hashable_args)
+        return function(*(args))
+
+    @wraps(function)
+    def wrapper(*array_args):
+        return cached_wrapper(*(_totuple(arg) for arg in array_args))
+
+    wrapper.cache_info = cached_wrapper.cache_info
+    wrapper.cache_clear = cached_wrapper.cache_clear
+
+    return wrapper
 
 
 
@@ -22,7 +44,8 @@ def find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun):
     return fmin_cg(
         lambda theta: parameter_error(theta, theta_init, sim_fun(theta), data_exp, weights, sigmas),
         theta_init,
-        grad_fun
+        grad_fun,
+        callback = lambda x: clear_all_caches()
     )
 
 def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_init, weights, sigmas):
@@ -43,26 +66,30 @@ def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_in
 ### EXACT SIMULATION
 ##### Broken down into small functions so that caching can easily be added
 
+@np_cache
 def hamiltonian_model(theta, operators):
-    return np.matrix(np.sum(np.array(operators)*theta.reshape((len(theta),1,1)),axis = 0))
+    return np.array(np.sum(operators*theta.reshape((len(theta),1,1)),axis = 0))
 
-def unitary_evolution(ham_matrix, time):
-    return np.matrix(expm(-1j*time*ham_matrix))
-    
+@np_cache
+def unitary_evolution(hamiltonian, time):
+    return expm(-1j*time*hamiltonian)
+
+@np_cache
 def apply_unitary(state, unitary):
-    return unitary.H * state * unitary
+    return np.linalg.multi_dot([unitary.conj().T, state, unitary])
 
-def evolve(state, ham_matrix, time):
-    evolution = unitary_evolution(ham_matrix, time)
+@np_cache
+def evolve(state, hamiltonian, time):
+    evolution = unitary_evolution(hamiltonian, time)
     return apply_unitary(state, evolution)
 
+@np_cache
 def expected_value(observable, state):
     val = np.trace(np.dot(observable,state))
     val = val.item()
     return val
 
-
-
+@np_cache
 def simulate_one(theta, operators, state, time, observable):
     #TO DO: add noise at the end
     hamiltonian = hamiltonian_model(theta, operators)
@@ -70,16 +97,29 @@ def simulate_one(theta, operators, state, time, observable):
     return expected_value(observable, evolved_state).real
 
 def simulate_all(theta, hamiltonian_operators, exp_settings):
-    data = np.array([simulate_one(theta, hamiltonian_operators, s['state'], s['time'], s['observable'])
+    data = np.array([simulate_one(theta, hamiltonian_operators,
+                                  np.array(s['state']),
+                                  np.array(s['time']),
+                                  np.array(s['observable']))
                                       for s in exp_settings])
     return data
 
 
+def clear_all_caches():
+    for fun in [simulate_one,
+                expected_value,
+                evolve,
+                apply_unitary,
+                unitary_evolution,
+                hamiltonian_model]:
+        fun.cache_clear()
+
 ### GRADIENT CALCULATION
 ##### TO DO: For now this works with exact simulation; should be generalized so that circuits etc can be used
 
+@np_cache
 def commutator(x,y):
-    return x*y - y*x
+    return np.dot(x,y) - np.dot(y,x)
 
 def j(observable, evolved_state, hamiltonian, operator, time):
     evolved_operator = evolve(operator, hamiltonian, time)
@@ -105,6 +145,7 @@ def Js(hamiltonian, operators, exp_settings):
                         for operator in operators
                        ])
     J_array = np.array(J_array).T
+    
     return J_array
 
 def error_gradient(theta, theta0, hamiltonian_operators, data_exp, data_sim, exp_settings, weights, sigmas):
