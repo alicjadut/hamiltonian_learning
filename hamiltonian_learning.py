@@ -26,7 +26,34 @@ def np_cache(function):
     return wrapper
 
 
+def gradient_descent(f, x0, grad_f,
+                     args = (), gtol=1e-05, step_size = 1, callback = lambda x: None, maxiter = None):
+#TO DO: norm, disp, approximate gradient
 
+    if(maxiter is None):
+        maxiter = 200*len(x0)
+    
+    x = x0
+    
+    for i in range(maxiter):
+        
+        callback(x)
+        
+        vec = grad_f(x, *args)
+        
+        if(np.max(np.abs(vec)) < gtol):
+            print(f'''Optimization terminated successfully.
+            Current function value: {f(x, *args)}
+            Iterations: {i}''')
+            return x
+        
+        x = x - step_size*vec
+        
+    print(f'''Warning: Desired error not necessarily achieved. Max number of iterations reached.
+            Current function value: {f(x, *args)}
+            Iterations: {i}''')
+    return x
+        
 
 def parameter_error(theta, theta0, data_sim, data_exp, weights, sigmas):
     '''
@@ -40,15 +67,29 @@ def parameter_error(theta, theta0, data_sim, data_exp, weights, sigmas):
     term2 = np.sum((data_sim-data_exp)**2/sigmas)/2   
     return term1+term2
 
-def find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun):
-    return fmin_cg(
-        lambda theta: parameter_error(theta, theta_init, sim_fun(theta), data_exp, weights, sigmas),
-        theta_init,
-        grad_fun,
-        callback = lambda x: clear_all_caches()
-    )
+def find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun, optimizer, optimizer_kwargs = {}):
+    
+    target_fun = lambda theta: parameter_error(theta, theta_init, sim_fun(theta), data_exp, weights, sigmas)
+    callback_fun = lambda x: clear_all_caches()
+     
+    if optimizer == 'scipy_cg':
+        return fmin_cg(
+            target_fun,
+            theta_init,
+            grad_fun,
+            **optimizer_kwargs,
+            callback = callback_fun
+        )
+    if optimizer == 'gd':
+        return gradient_descent(
+            target_fun,
+            theta_init,
+            grad_fun,
+            **optimizer_kwargs,
+            callback = callback_fun
+        )
 
-def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_init, weights, sigmas):
+def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_init, weights, sigmas, optimizer, optimizer_kwargs = {}):
     
     sim_fun = lambda theta: simulate_all(theta, hamiltonian_operators, exp_settings)
     grad_fun = lambda theta: error_gradient(theta,
@@ -60,7 +101,7 @@ def hamiltonian_learning(hamiltonian_operators, exp_settings, data_exp, theta_in
                                             weights,
                                             sigmas)
     
-    return find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun)
+    return find_parameters(data_exp, theta_init, weights, sigmas, sim_fun, grad_fun, optimizer, optimizer_kwargs)
     
 
 ### EXACT SIMULATION
