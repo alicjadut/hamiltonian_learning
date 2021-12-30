@@ -28,11 +28,11 @@ def np_cache(function):
 
 def gradient_descent(f, x0, grad_f,
                      args = (), gtol=1e-05, step_size = 1, callback = lambda x: None, maxiter = None, full_output = False):
-#TO DO: norm, disp, approximate gradient, other exit conditions
+#TO DO: norm, disp, approximate gradient, other exit conditions?
 
     if(maxiter is None):
         maxiter = 200*len(x0)
-    
+    warnflag = None
     x = x0
     
     for i in range(maxiter):
@@ -42,18 +42,21 @@ def gradient_descent(f, x0, grad_f,
         vec = grad_f(x, *args)
         
         if(np.max(np.abs(vec)) < gtol):
-            fopt = f(x, *args)
-            print(f'''Optimization terminated successfully.
-            Current function value: {fopt}
-            Iterations: {i}''')
-            if full_output:
-                return x, fopt, i, i, 0
-            return x
+            warnflag = 0
+            break
         
         x = x - step_size*vec
     
+    if warnflag is None:
+        warnflag = 1
     fopt = f(x, *args)
-    print(f'''Warning: Desired precision not necessarily achieved. Max number of iterations reached.
+    
+    message = {
+        0:'Optimization terminated successfully',
+        1:'Warning: Desired precision not necessarily achieved. Max number of iterations reached.'
+    }[warnflag]
+    print(message)
+    print(f'''
             Current function value: {fopt}
             Iterations: {i}''')
     if full_output:
