@@ -73,7 +73,7 @@ def gradient_descent(f, x0, grad_f,
             Current function value: {fopt}
             Iterations: {i}''')
     if full_output:
-        return x, fopt, i, i, 1
+        return x, fopt, i, i, warnflag
     return x
         
 
