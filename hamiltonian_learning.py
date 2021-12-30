@@ -27,8 +27,12 @@ def np_cache(function):
 
 
 def gradient_descent(f, x0, grad_f,
-                     args = (), gtol=1e-05, step_size = 1, callback = lambda x: None, maxiter = None, full_output = False):
+                     args = (), gtol=1e-05, maxiter = None,
+                     step_size = 1, step_choice = None,
+                     callback = lambda x: None,
+                     full_output = False,):
 #TO DO: norm, disp, approximate gradient, other exit conditions?
+#TO DO: line search for choosing stepsize
 
     if(maxiter is None):
         maxiter = 200*len(x0)
@@ -39,13 +43,22 @@ def gradient_descent(f, x0, grad_f,
         
         callback(x)
         
-        vec = grad_f(x, *args)
+        gradvec = grad_f(x, *args)
         
-        if(np.max(np.abs(vec)) < gtol):
+        if(np.max(np.abs(gradvec)) < gtol):
             warnflag = 0
             break
         
-        x = x - step_size*vec
+        if step_choice == 'BB':
+            #Barzilai–Borwein method
+            if i == 0:
+                pass
+            else:
+                step_size = np.abs(np.dot(x-x_prev, gradvec - gradvec_prev))/np.dot(gradvec - gradvec_prev, gradvec - gradvec_prev)
+            x_prev = x
+            gradvec_prev = gradvec
+            
+        x = x - step_size*gradvec
     
     if warnflag is None:
         warnflag = 1
